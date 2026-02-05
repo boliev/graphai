@@ -11,7 +11,7 @@ type Messages struct {
 	Caption string
 	ChatID  int64
 	ReplyId int
-	Files   []tgbotapi.PhotoConfig
+	Paths   []string
 	Dt      time.Time
 }
 
@@ -42,7 +42,7 @@ func (c *Collector) Run() error {
 					Caption: "",
 					ChatID:  m.Chat.ID,
 					ReplyId: m.MessageID,
-					Files:   []tgbotapi.PhotoConfig{},
+					Paths:   []string{},
 					Dt:      time.Now(),
 				}
 			}
@@ -50,7 +50,14 @@ func (c *Collector) Run() error {
 			// обычно последний элемент — самое большое фото
 			photo := m.Photo[len(m.Photo)-1]
 			p := tgbotapi.NewPhoto(m.Chat.ID, tgbotapi.FileID(photo.FileID))
-			c.data[mgID].Files = append(c.data[mgID].Files, p)
+
+			file, err := c.bot.GetFile(tgbotapi.FileConfig{FileID: photo.FileID})
+			if err != nil {
+				return err
+			}
+			url := file.Link(c.bot.Token)
+			c.data[mgID].Paths = append(c.data[mgID].Paths, url)
+
 			if m.Caption != "" {
 				c.data[mgID].Caption = m.Caption
 			}

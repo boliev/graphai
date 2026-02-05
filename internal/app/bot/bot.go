@@ -1,12 +1,14 @@
 package bot
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"sync"
 
 	"github.com/boliev/graphai/internal/domain/tgbot"
 	"github.com/boliev/graphai/internal/pkg/config"
+	"github.com/boliev/graphai/internal/pkg/gemini"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -20,6 +22,7 @@ func New() *Bot {
 func (b *Bot) Start() error {
 	fmt.Println("Bot is running")
 
+	ctx := context.Background()
 	cfg := config.New()
 	data := make(map[string]*tgbot.Messages)
 
@@ -28,7 +31,11 @@ func (b *Bot) Start() error {
 		panic(err)
 	}
 	collector := tgbot.NewCollector(data, bot)
-	processor := tgbot.NewProcessor(data, bot)
+	ai, err := gemini.NewGemini(ctx, cfg.GeminiToken)
+	if err != nil {
+		panic(err)
+	}
+	processor := tgbot.NewProcessor(data, bot, ai)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
