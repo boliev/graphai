@@ -64,7 +64,7 @@ jobs:
         run: |
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
             chmod +x /opt/$APP_NAME/releases/$RELEASE_ID/$APP_NAME &&
-            ln -sfn /opt/$APP_NAME/releases/$RELEASE_ID /opt/$APP_NAME/current &&
+            ln -sfn /opt/$APP_NAME/releases/$RELEASE_ID/$APP_NAME /opt/$APP_NAME/current/$APP_NAME &&
             sudo systemctl restart $APP_NAME &&
             sudo systemctl is-active $APP_NAME
           "
