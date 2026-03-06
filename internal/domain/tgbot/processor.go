@@ -43,7 +43,7 @@ func (s *Processor) Run() error {
 					Bytes: resp.Photo,
 				})
 
-				m.ReplyToMessageID = msg.ReplyId
+				//m.ReplyToMessageID = msg.ReplyId
 				if _, err := s.bot.Send(m); err != nil {
 					log.Println("send text:", err)
 				}
