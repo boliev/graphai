@@ -6,9 +6,11 @@ import (
 	"log"
 	"sync"
 
-	"github.com/boliev/graphai/internal/domain/tgbot"
+	"github.com/boliev/graphai/internal/domain/ai"
+	"github.com/boliev/graphai/internal/domain/bot"
 	"github.com/boliev/graphai/internal/pkg/config"
 	"github.com/boliev/graphai/internal/pkg/gemini"
+	"github.com/boliev/graphai/internal/pkg/tg"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -24,23 +26,29 @@ func (b *Bot) Start() error {
 
 	ctx := context.Background()
 	cfg := config.New()
-	data := make(map[string]*tgbot.Messages)
+	data := make(map[string]*bot.Messages)
 
-	bot, err := b.createBot(cfg)
+	tgBotApi, err := b.createTgBotApi(cfg)
 	if err != nil {
 		panic(err)
 	}
-	collector := tgbot.NewCollector(data, bot)
-	ai, err := gemini.NewGemini(ctx, cfg.GeminiToken)
+
+	tgClient := tg.NewClient(tgBotApi)
+
+	sender := bot.NewSender(tgClient)
+	commander := bot.NewCommander(sender)
+	tgProcessor := bot.NewProcessor(data, tgBotApi, sender, commander)
+
+	aiClient, err := gemini.NewGemini(ctx, cfg.GeminiToken)
 	if err != nil {
 		panic(err)
 	}
-	processor := tgbot.NewProcessor(data, bot, ai)
+	aiProcessor := ai.NewProcessor(data, aiClient, sender)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {
-		err := collector.Run()
+		err := tgProcessor.Run()
 		if err != nil {
 			wg.Done()
 			log.Fatal(err)
@@ -49,7 +57,7 @@ func (b *Bot) Start() error {
 
 	wg.Add(1)
 	go func() {
-		err := processor.Run()
+		err := aiProcessor.Run()
 		if err != nil {
 			wg.Done()
 			log.Fatal(err)
@@ -57,13 +65,10 @@ func (b *Bot) Start() error {
 	}()
 	wg.Wait()
 
-	//MG := make(map[string]mediaGroup, 0)
-	//
-
 	return nil
 }
 
-func (b *Bot) createBot(cfg *config.Cfg) (*tgbotapi.BotAPI, error) {
+func (b *Bot) createTgBotApi(cfg *config.Cfg) (*tgbotapi.BotAPI, error) {
 
 	bot, err := tgbotapi.NewBotAPI(cfg.BotToken)
 	if err != nil {
