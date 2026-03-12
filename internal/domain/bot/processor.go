@@ -4,6 +4,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/boliev/graphai/internal/domain/user"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -15,23 +16,25 @@ type Messages struct {
 	Dt      time.Time
 }
 
-type Collector struct {
-	data      map[string]*Messages
-	bot       *tgbotapi.BotAPI
-	sender    *Sender
-	commander *Commander
+type Processor struct {
+	data        map[string]*Messages
+	bot         *tgbotapi.BotAPI
+	sender      *Sender
+	commander   *Commander
+	userService *user.Service
 }
 
-func NewProcessor(data map[string]*Messages, bot *tgbotapi.BotAPI, sender *Sender, commander *Commander) *Collector {
-	return &Collector{
-		data:      data,
-		bot:       bot,
-		sender:    sender,
-		commander: commander,
+func NewProcessor(data map[string]*Messages, bot *tgbotapi.BotAPI, sender *Sender, commander *Commander, userService *user.Service) *Processor {
+	return &Processor{
+		data:        data,
+		bot:         bot,
+		sender:      sender,
+		commander:   commander,
+		userService: userService,
 	}
 }
 
-func (c *Collector) Run() error {
+func (c *Processor) Run() error {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 

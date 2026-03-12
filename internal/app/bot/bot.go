@@ -8,10 +8,13 @@ import (
 
 	"github.com/boliev/graphai/internal/domain/ai"
 	"github.com/boliev/graphai/internal/domain/bot"
+	"github.com/boliev/graphai/internal/domain/user"
+	"github.com/boliev/graphai/internal/infra/pg/repository"
 	"github.com/boliev/graphai/internal/pkg/config"
 	"github.com/boliev/graphai/internal/pkg/gemini"
 	"github.com/boliev/graphai/internal/pkg/tg"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Bot struct {
@@ -35,9 +38,17 @@ func (b *Bot) Start() error {
 
 	tgClient := tg.NewClient(tgBotApi)
 
+	pool, err := pgxpool.New(ctx, cfg.PGConnect)
+	if err != nil {
+		panic(err)
+	}
+
+	userRepo := repository.NewUser(pool)
+	userService := user.NewService(userRepo)
+
 	sender := bot.NewSender(tgClient)
 	commander := bot.NewCommander(sender)
-	tgProcessor := bot.NewProcessor(data, tgBotApi, sender, commander)
+	tgProcessor := bot.NewProcessor(data, tgBotApi, sender, commander, userService)
 
 	aiClient, err := gemini.NewGemini(ctx, cfg.GeminiToken)
 	if err != nil {

@@ -1,6 +1,6 @@
 package domain
 
-const MessageButtonTypeData = "data"
+const MessageButtonTypeData = ".data"
 const MessageButtonTypeUrl = "url"
 
 type Message struct {
