@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: graphai-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: graphai
+      POSTGRES_USER: graphai
+      POSTGRES_PASSWORD: 123456
+      PGDATA: /var/lib/postgresql/data/pg_data
+    ports:
+      - "5432:5432"
+    volumes:
+      - .data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

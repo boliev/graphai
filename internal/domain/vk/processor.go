@@ -1,0 +1,112 @@
+package vk
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"log"
+
+	"github.com/SevereCloud/vksdk/v2/events"
+	"github.com/SevereCloud/vksdk/v2/object"
+	"github.com/boliev/graphai/internal/domain"
+)
+
+type ai interface {
+	Send(ctx context.Context, description string, files []string) (*domain.AIResponse, error)
+}
+
+type Processor struct {
+	token    string
+	sender   *Sender
+	aiClient ai
+}
+
+func NewProcessor(token string, sender *Sender, ai ai) *Processor {
+	return &Processor{
+		token:    token,
+		sender:   sender,
+		aiClient: ai,
+	}
+}
+
+func (p Processor) Run() error {
+	// Создаем Long Poll клиент для сообщества.
+	lp, err := p.sender.getLP()
+	if err != nil {
+		log.Fatalf("longpoll.NewLongPoll failed: %v", err)
+	}
+
+	// Обрабатываем новые сообщения.
+	lp.MessageNew(func(_ context.Context, obj events.MessageNewObject) {
+		msg := obj.Message
+		if msg.Payload != "" {
+			err := p.command(msg)
+			if err != nil {
+				log.Printf("command failed: %v", err)
+			}
+			return
+		}
+
+		fullMsg, err := p.sender.loadFullMessage(msg)
+		if err != nil {
+			log.Printf("load full message failed: %v", err)
+			fullMsg = msg // fallback на то, что пришло в событии
+		}
+
+		photoURLs := p.sender.extractPhotoURLs(fullMsg.Attachments)
+		log.Printf("full message attachments=%d photos=%d", len(fullMsg.Attachments), len(photoURLs))
+		if len(photoURLs) == 0 {
+			err = p.sender.sendKB(msg.PeerID)
+			if err != nil {
+				log.Printf("sender.sendKB failed: %v", err)
+			}
+			return
+		}
+
+		resp, err := p.aiClient.Send(context.Background(), msg.Text, photoURLs)
+		if err != nil {
+			log.Printf("ai.Send() failed: %v", err)
+			return
+		}
+
+		resultPhoto, err := p.sender.uploadMessagesPhoto(msg.PeerID, resp.Photo)
+		if err != nil {
+			log.Printf("upload messages photo failed: %v", err)
+			return
+		}
+
+		err = p.sender.send(msg.PeerID, msg.ID, resultPhoto[0].OwnerID, resultPhoto[0].ID)
+
+		if err != nil {
+			log.Printf("messages.send failed: %v", err)
+			return
+		}
+	})
+
+	log.Println("VK long poll started")
+	if err := lp.Run(); err != nil {
+		log.Fatalf("long poll stopped: %v", err)
+	}
+
+	return nil
+}
+
+func (p Processor) command(msg object.MessagesMessage) error {
+	type ButtonPayload struct {
+		Cmd string `json:"cmd"`
+	}
+	var c ButtonPayload
+	err := json.Unmarshal([]byte(msg.Payload), &c)
+	if err != nil {
+		return fmt.Errorf("invalid payload: %v, raw=%s", err, msg.Payload)
+	}
+
+	switch c.Cmd {
+	case "prices":
+		p.sender.prices(msg.PeerID)
+	default:
+		p.sender.help(msg.PeerID)
+	}
+
+	return nil
+}
