@@ -1,10 +1,9 @@
 CREATE TABLE IF NOT EXISTS users (
     id BIGSERIAL PRIMARY KEY,
-    chat_id BIGINT NOT NULL UNIQUE,
-    username TEXT NOT NULL,
-    firstname TEXT NOT NULL,
-    lastname TEXT NOT NULL,
+    user_vk_id BIGINT NOT NULL UNIQUE,
+    peer_id BIGINT NOT NULL,
     balance BIGINT NOT NULL DEFAULT 0,
+    free_usages INT NOT NULL DEFAULT 1,
     last_action TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_notify TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

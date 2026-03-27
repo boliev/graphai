@@ -9,6 +9,7 @@ import (
 	"github.com/SevereCloud/vksdk/v2/events"
 	"github.com/SevereCloud/vksdk/v2/object"
 	"github.com/boliev/graphai/internal/domain"
+	"github.com/boliev/graphai/internal/domain/user"
 )
 
 type ai interface {
@@ -16,16 +17,18 @@ type ai interface {
 }
 
 type Processor struct {
-	token    string
-	sender   *Sender
-	aiClient ai
+	token       string
+	sender      *Sender
+	aiClient    ai
+	userService *user.Service
 }
 
-func NewProcessor(token string, sender *Sender, ai ai) *Processor {
+func NewProcessor(token string, sender *Sender, ai ai, userService *user.Service) *Processor {
 	return &Processor{
-		token:    token,
-		sender:   sender,
-		aiClient: ai,
+		token:       token,
+		sender:      sender,
+		aiClient:    ai,
+		userService: userService,
 	}
 }
 
@@ -38,7 +41,14 @@ func (p Processor) Run() error {
 
 	// Обрабатываем новые сообщения.
 	lp.MessageNew(func(_ context.Context, obj events.MessageNewObject) {
+		ctx := context.Background()
 		msg := obj.Message
+		_, err := p.userService.Upsert(ctx, p.userFromMessage(msg))
+		if err != nil {
+			log.Fatalf("userService.Upsert() failed: %v", err)
+			return
+		}
+
 		if msg.Payload != "" {
 			err := p.command(msg)
 			if err != nil {
@@ -63,7 +73,7 @@ func (p Processor) Run() error {
 			return
 		}
 
-		resp, err := p.aiClient.Send(context.Background(), msg.Text, photoURLs)
+		resp, err := p.aiClient.Send(ctx, msg.Text, photoURLs)
 		if err != nil {
 			log.Printf("ai.Send() failed: %v", err)
 			return
@@ -91,7 +101,7 @@ func (p Processor) Run() error {
 	return nil
 }
 
-func (p Processor) command(msg object.MessagesMessage) error {
+func (p *Processor) command(msg object.MessagesMessage) error {
 	type ButtonPayload struct {
 		Cmd string `json:"cmd"`
 	}
@@ -109,4 +119,11 @@ func (p Processor) command(msg object.MessagesMessage) error {
 	}
 
 	return nil
+}
+
+func (p *Processor) userFromMessage(msg object.MessagesMessage) *user.User {
+	return &user.User{
+		UserVKID: int64(msg.FromID),
+		PeerID:   int64(msg.PeerID),
+	}
 }

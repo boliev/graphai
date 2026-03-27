@@ -7,10 +7,13 @@ import (
 	"sync"
 
 	"github.com/SevereCloud/vksdk/v2/api"
+	"github.com/boliev/graphai/internal/domain/user"
 	"github.com/boliev/graphai/internal/domain/vk"
+	"github.com/boliev/graphai/internal/infra/pg/repository"
 	"github.com/boliev/graphai/internal/pkg/config"
 	"github.com/boliev/graphai/internal/pkg/gemini"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Bot struct {
@@ -34,7 +37,15 @@ func (b *Bot) Start() error {
 	vkApi := api.NewVK(cfg.VKGroupToken)
 	vkSender := vk.NewSender(vkApi, cfg)
 
-	vkProcessor := vk.NewProcessor(cfg.VKGroupToken, vkSender, aiClient)
+	pool, err := pgxpool.New(ctx, cfg.PGConnect)
+	if err != nil {
+		panic(err)
+	}
+
+	userRepo := repository.NewUserRepo(pool)
+	userService := user.NewService(userRepo)
+
+	vkProcessor := vk.NewProcessor(cfg.VKGroupToken, vkSender, aiClient, userService)
 
 	wg := sync.WaitGroup{}
 
