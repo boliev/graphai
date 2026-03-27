@@ -20,3 +20,11 @@ func (s *Service) Upsert(ctx context.Context, user *User) (*User, error) {
 
 	return s.repo.Upsert(ctx, user)
 }
+
+func (s *Service) ReduceFreeUsages(ctx context.Context, user *User) error {
+	if user == nil || user.ID == 0 {
+		return fmt.Errorf("invalid user")
+	}
+
+	return s.repo.ReduceFreeUsages(ctx, user.ID)
+}

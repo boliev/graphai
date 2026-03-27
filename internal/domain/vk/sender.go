@@ -26,6 +26,10 @@ const PRICES_MESSAGE = `первое фото бесплатно
  - 3 фото — 249 ₽
  - 5 фото — 349 ₽`
 
+const NOT_ENOUGH_MONEY_MESSAGE = `Похоже, бесплатная первая обработка уже использована ✨
+Сейчас на балансе недостаточно средств для новой обработки.
+Пополните баланс, и я с радостью помогу подготовить для вас красивый результат 💖`
+
 type Sender struct {
 	vk            *api.VK
 	groupID       int
@@ -67,9 +71,9 @@ func (s *Sender) send(peerID int, messageID, ownerID int, photoID int) error {
 	return err
 }
 
-func (s *Sender) sendText(peerID int, text string) error {
+func (s *Sender) sendText(peerID int64, text string) error {
 
-	kb, err := s.KB(false)
+	kb, err := s.KB(true)
 	if err != nil {
 		return err
 	}
@@ -165,8 +169,8 @@ func (s *Sender) getLP() (*longpoll.LongPoll, error) {
 	return lp, nil
 }
 
-func (s *Sender) uploadMessagesPhoto(peerID int, photo []byte) (api.PhotosSaveMessagesPhotoResponse, error) {
-	resultPhoto, err := s.vk.UploadMessagesPhoto(peerID, bytes.NewReader(photo))
+func (s *Sender) uploadMessagesPhoto(peerID int64, photo []byte) (api.PhotosSaveMessagesPhotoResponse, error) {
+	resultPhoto, err := s.vk.UploadMessagesPhoto(int(peerID), bytes.NewReader(photo))
 	if err != nil {
 		log.Printf("upload messages photo: %w", err)
 	}
@@ -178,12 +182,16 @@ func (s *Sender) uploadMessagesPhoto(peerID int, photo []byte) (api.PhotosSaveMe
 	return resultPhoto, nil
 }
 
-func (s *Sender) help(peerID int) {
+func (s *Sender) help(peerID int64) {
 	s.sendText(peerID, HELP_MESSAGE)
 }
 
-func (s *Sender) prices(peerID int) {
+func (s *Sender) prices(peerID int64) {
 	s.sendText(peerID, PRICES_MESSAGE)
+}
+
+func (s *Sender) NotEnoughMoney(peerID int64) {
+	s.sendText(peerID, NOT_ENOUGH_MONEY_MESSAGE)
 }
 
 func (s *Sender) KB(inline bool) (string, error) {

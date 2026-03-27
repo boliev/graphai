@@ -43,7 +43,7 @@ func (p Processor) Run() error {
 	lp.MessageNew(func(_ context.Context, obj events.MessageNewObject) {
 		ctx := context.Background()
 		msg := obj.Message
-		_, err := p.userService.Upsert(ctx, p.userFromMessage(msg))
+		user, err := p.userService.Upsert(ctx, p.userFromMessage(msg))
 		if err != nil {
 			log.Fatalf("userService.Upsert() failed: %v", err)
 			return
@@ -54,6 +54,16 @@ func (p Processor) Run() error {
 			if err != nil {
 				log.Printf("command failed: %v", err)
 			}
+			return
+		}
+
+		hasBalance := false
+		if user.FreeUsages > 0 {
+			hasBalance = true
+		}
+
+		if !hasBalance {
+			p.sender.NotEnoughMoney(user.PeerID)
 			return
 		}
 
@@ -79,16 +89,21 @@ func (p Processor) Run() error {
 			return
 		}
 
-		resultPhoto, err := p.sender.uploadMessagesPhoto(msg.PeerID, resp.Photo)
+		resultPhoto, err := p.sender.uploadMessagesPhoto(int64(msg.PeerID), resp.Photo)
 		if err != nil {
 			log.Printf("upload messages photo failed: %v", err)
 			return
 		}
 
 		err = p.sender.send(msg.PeerID, msg.ID, resultPhoto[0].OwnerID, resultPhoto[0].ID)
-
 		if err != nil {
 			log.Printf("messages.send failed: %v", err)
+			return
+		}
+
+		err = p.userService.ReduceFreeUsages(ctx, user)
+		if err != nil {
+			log.Printf("userService.ReduceFreeUsages() failed: %v", err)
 			return
 		}
 	})
@@ -113,9 +128,9 @@ func (p *Processor) command(msg object.MessagesMessage) error {
 
 	switch c.Cmd {
 	case "prices":
-		p.sender.prices(msg.PeerID)
+		p.sender.prices(int64(msg.PeerID))
 	default:
-		p.sender.help(msg.PeerID)
+		p.sender.help(int64(msg.PeerID))
 	}
 
 	return nil

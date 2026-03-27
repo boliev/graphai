@@ -41,8 +41,8 @@ func (u *UserRepo) FindByVKID(ctx context.Context, id int64) (*user.User, error)
 	return &usr, nil
 }
 
-func (u *UserRepo) RefreshLastAction(ctx context.Context, id int64) error {
-	sql := "UPDATE users SET last_action=now() WHERE id=$1"
+func (u *UserRepo) ReduceFreeUsages(ctx context.Context, id int64) error {
+	sql := "UPDATE users SET free_usages=(free_usages-1) WHERE id=$1"
 	_, err := u.pool.Exec(ctx, sql, id)
 	return err
 }
