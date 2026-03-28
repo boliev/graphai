@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/SevereCloud/vksdk/v2/api"
+	"github.com/boliev/graphai/internal/domain/transactions"
 	"github.com/boliev/graphai/internal/domain/user"
 	"github.com/boliev/graphai/internal/domain/vk"
 	"github.com/boliev/graphai/internal/infra/pg/repository"
@@ -45,7 +46,10 @@ func (b *Bot) Start() error {
 	userRepo := repository.NewUserRepo(pool)
 	userService := user.NewService(userRepo)
 
-	vkProcessor := vk.NewProcessor(cfg.VKGroupToken, vkSender, aiClient, userService)
+	txRepo := repository.NewTransactionsRepo(pool)
+	txService := transactions.NewService(txRepo)
+
+	vkProcessor := vk.NewProcessor(cfg.VKGroupToken, vkSender, aiClient, userService, txService)
 
 	wg := sync.WaitGroup{}
 

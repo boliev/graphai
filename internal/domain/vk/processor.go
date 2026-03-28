@@ -9,6 +9,7 @@ import (
 	"github.com/SevereCloud/vksdk/v2/events"
 	"github.com/SevereCloud/vksdk/v2/object"
 	"github.com/boliev/graphai/internal/domain"
+	"github.com/boliev/graphai/internal/domain/transactions"
 	"github.com/boliev/graphai/internal/domain/user"
 )
 
@@ -21,14 +22,16 @@ type Processor struct {
 	sender      *Sender
 	aiClient    ai
 	userService *user.Service
+	txService   *transactions.Service
 }
 
-func NewProcessor(token string, sender *Sender, ai ai, userService *user.Service) *Processor {
+func NewProcessor(token string, sender *Sender, ai ai, userService *user.Service, txService *transactions.Service) *Processor {
 	return &Processor{
 		token:       token,
 		sender:      sender,
 		aiClient:    ai,
 		userService: userService,
+		txService:   txService,
 	}
 }
 
@@ -101,7 +104,21 @@ func (p Processor) Run() error {
 			return
 		}
 
-		err = p.userService.ReduceFreeUsages(ctx, user)
+		if user.FreeUsages > 0 {
+			err = p.userService.ReduceFreeUsages(ctx, user)
+			transaction := &transactions.Transaction{
+				UserID:        user.ID,
+				Prompt:        msg.Text,
+				OperationType: transactions.OPERATION_TYPE_FREE_USAGE,
+				Amount:        0,
+			}
+			err := p.txService.Create(ctx, transaction)
+			if err != nil {
+				log.Printf("txService.Create() failed: %v", err)
+				return
+			}
+
+		}
 		if err != nil {
 			log.Printf("userService.ReduceFreeUsages() failed: %v", err)
 			return
