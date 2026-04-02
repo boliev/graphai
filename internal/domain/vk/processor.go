@@ -106,6 +106,11 @@ func (p Processor) Run() error {
 
 		if user.FreeUsages > 0 {
 			err = p.userService.ReduceFreeUsages(ctx, user)
+			if err != nil {
+				log.Printf("userService.ReduceFreeUsages() failed: %v", err)
+				return
+			}
+
 			transaction := &transactions.Transaction{
 				UserID:        user.ID,
 				Prompt:        msg.Text,
@@ -117,11 +122,6 @@ func (p Processor) Run() error {
 				log.Printf("txService.Create() failed: %v", err)
 				return
 			}
-
-		}
-		if err != nil {
-			log.Printf("userService.ReduceFreeUsages() failed: %v", err)
-			return
 		}
 	})
 

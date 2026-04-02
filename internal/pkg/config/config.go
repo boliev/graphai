@@ -8,6 +8,8 @@ type Cfg struct {
 	GeminiToken   string
 	PGConnect     string
 	CommunityLink string
+	VKApiPort     string
+	VkSecureKey   string
 }
 
 func New() *Cfg {
@@ -17,5 +19,7 @@ func New() *Cfg {
 		GeminiToken:   os.Getenv("GEMINI_TOKEN"),
 		PGConnect:     os.Getenv("PG_CONNECT"),
 		CommunityLink: os.Getenv("COMMUNITY_LINK"),
+		VKApiPort:     os.Getenv("VK_API_PORT"),
+		VkSecureKey:   os.Getenv("VK_SECURE_KEY"),
 	}
 }
