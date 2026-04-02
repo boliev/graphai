@@ -172,11 +172,13 @@ func (s *Sender) getLP() (*longpoll.LongPoll, error) {
 func (s *Sender) uploadMessagesPhoto(peerID int64, photo []byte) (api.PhotosSaveMessagesPhotoResponse, error) {
 	resultPhoto, err := s.vk.UploadMessagesPhoto(int(peerID), bytes.NewReader(photo))
 	if err != nil {
-		log.Printf("upload messages photo: %w", err)
+		log.Printf("upload messages photo: %v", err)
+		return nil, err
 	}
 
 	if len(resultPhoto) == 0 {
-		log.Printf(("upload messages photo returned empty response"))
+		log.Printf("upload messages photo returned empty response")
+		return nil, fmt.Errorf("upload messages photo returned empty response")
 	}
 
 	return resultPhoto, nil
