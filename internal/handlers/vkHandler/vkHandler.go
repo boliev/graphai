@@ -33,10 +33,10 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		form[k] = r.PostForm.Get(k)
 	}
 
-	//if !h.validateVKSignature(form, h.vkSecureKey) {
-	//	h.writeVKError(w, http.StatusForbidden, 10, "bad signature", true)
-	//	return
-	//}
+	if !h.validateVKSignature(form, h.vkSecureKey) {
+		h.writeVKError(w, http.StatusForbidden, 10, "bad signature", true)
+		return
+	}
 
 	notificationType := form["notification_type"]
 
