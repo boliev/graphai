@@ -87,7 +87,6 @@ jobs:
             cd /opt/$APP_NAME/releases &&
             ls -1dt */ | tail -n +6 | xargs -r rm -rf
           "
-          ...
 
       - name: Upload bot
         env:
