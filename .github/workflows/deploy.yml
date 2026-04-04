@@ -48,15 +48,6 @@ jobs:
           ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST_US }}" >> ~/.ssh/known_hosts
           ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST_RU }}" >> ~/.ssh/known_hosts
 
-      - name: Debug SSH
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST_RU }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-        run: |
-          set -euo pipefail
-          ssh -vvv -i ~/.ssh/id_ed25519 -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "echo ok"
-
       - name: Upload VK API
         env:
           SSH_HOST: ${{ secrets.SSH_HOST_RU }}
