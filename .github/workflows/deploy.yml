@@ -33,71 +33,96 @@ jobs:
       - name: Build bot
         run: |
           mkdir -p dist-bot
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist-bot/${{ secrets.APP_NAME }}_bot ./cmd/bot/main.go
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist-bot/${{ secrets.APP_NAME_BOT }} ./cmd/bot/main.go
 
       - name: Build vk api
         run: |
           mkdir -p dist-vk-api
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist-vk-api/${{ secrets.APP_NAME }}_vk_api ./cmd/vkapi/main.go
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o dist-vk-api/${{ secrets.APP_NAME_VK_API }} ./cmd/vkapi/main.go
 
       - name: Prepare SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
-
-      - name: Upload bot
-        env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
-          SSH_PORT: ${{ secrets.SSH_PORT }}
-          SSH_USER: ${{ secrets.SSH_USER }}
-          APP_NAME: ${{ secrets.APP_NAME }}
-        run: |
-          RELEASE_ID="${{ github.event.release.tag_name }}"
-          echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_ENV
-
-          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "mkdir -p /opt/$APP_NAME/releases/$RELEASE_ID"
-          scp -P "$SSH_PORT" dist-bot/${APP_NAME}_bot "$SSH_USER@$SSH_HOST:/opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME}_bot"
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST_US }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST_RU }}" >> ~/.ssh/known_hosts
 
       - name: Upload VK API
         env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_HOST: ${{ secrets.SSH_HOST_RU }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
           SSH_USER: ${{ secrets.SSH_USER }}
-          APP_NAME: ${{ secrets.APP_NAME }}
+          APP_NAME: ${{ secrets.APP_NAME_VK_API }}
         run: |
           RELEASE_ID="${{ github.event.release.tag_name }}"
           echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_ENV
 
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "mkdir -p /opt/$APP_NAME/releases/$RELEASE_ID"
-          scp -P "$SSH_PORT" dist-vk-api/${APP_NAME}_vk_api "$SSH_USER@$SSH_HOST:/opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME}_vk_api"
+          scp -P "$SSH_PORT" dist-vk-api/${APP_NAME} "$SSH_USER@$SSH_HOST:/opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME}"
 
-      - name: Activate release and restart
+      - name: Activate VK API release and restart
         env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_HOST: ${{ secrets.SSH_HOST_RU }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
           SSH_USER: ${{ secrets.SSH_USER }}
-          APP_NAME: ${{ secrets.APP_NAME }}
+          APP_NAME: ${{ secrets.APP_NAME_VK_API }}
         run: |
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
-            chmod +x /opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME}_bot &&
-            chmod +x /opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME}_vk_api &&
-            ln -sfn /opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME}_bot /opt/$APP_NAME/current/${APP_NAME}_bot &&
-            ln -sfn /opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME}_vk_api /opt/$APP_NAME/current/${APP_NAME}_vk_api &&
-            sudo systemctl restart ${APP_NAME}_bot &&
-            sudo systemctl is-active ${APP_NAME}_bot &&
-            sudo systemctl restart ${APP_NAME}_vk_api &&
-            sudo systemctl is-active ${APP_NAME}_vk_api
+            chmod +x /opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME} &&
+            ln -sfn /opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME} /opt/$APP_NAME/current/${APP_NAME} &&
+            sudo systemctl restart ${APP_NAME} &&
+            sudo systemctl is-active ${APP_NAME}
           "
 
-      - name: Cleanup old releases
+      - name: Cleanup old VK API releases
         if: success()
         env:
-          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_HOST: ${{ secrets.SSH_HOST_RU }}
           SSH_PORT: ${{ secrets.SSH_PORT }}
           SSH_USER: ${{ secrets.SSH_USER }}
-          APP_NAME: ${{ secrets.APP_NAME }}
+          APP_NAME: ${{ secrets.APP_NAME_VK_API }}
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            cd /opt/$APP_NAME/releases &&
+            ls -1dt */ | tail -n +6 | xargs -r rm -rf
+          "
+          ...
+
+      - name: Upload bot
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST_US }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          APP_NAME: ${{ secrets.APP_NAME_BOT }}
+        run: |
+          RELEASE_ID="${{ github.event.release.tag_name }}"
+          echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_ENV
+
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "mkdir -p /opt/$APP_NAME/releases/$RELEASE_ID"
+          scp -P "$SSH_PORT" dist-bot/${APP_NAME} "$SSH_USER@$SSH_HOST:/opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME}"
+
+      - name: Activate Bot release and restart
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST_US }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          APP_NAME: ${{ secrets.APP_NAME_BOT }}
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            chmod +x /opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME} &&
+            ln -sfn /opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME} /opt/$APP_NAME/current/${APP_NAME} &&
+            sudo systemctl restart ${APP_NAME} &&
+            sudo systemctl is-active ${APP_NAME}
+          "
+
+      - name: Cleanup old Bot releases
+        if: success()
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST_US }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          APP_NAME: ${{ secrets.APP_NAME_BOT }}
         run: |
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
             cd /opt/$APP_NAME/releases &&
