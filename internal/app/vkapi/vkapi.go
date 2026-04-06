@@ -5,11 +5,13 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/boliev/graphai/internal/handlers/me"
 	"github.com/boliev/graphai/internal/handlers/vkHandler"
 	"github.com/boliev/graphai/internal/pkg/config"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/cors"
 )
 
 type VKApi struct {
@@ -27,6 +29,28 @@ func (v *VKApi) Run() {
 
 func (v *VKApi) startServer(cfg *config.Cfg) {
 	r := chi.NewRouter()
+
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins: []string{
+			"https://graphai-pay.ai128.ru",
+		},
+		AllowedMethods: []string{
+			http.MethodGet,
+			http.MethodPost,
+			http.MethodOptions,
+		},
+		AllowedHeaders: []string{
+			"Accept",
+			"Authorization",
+			"Content-Type",
+			"Origin",
+		},
+		ExposedHeaders: []string{
+			"Content-Length",
+		},
+		AllowCredentials: true,
+		MaxAge:           int((10 * time.Minute).Seconds()),
+	}))
 
 	vk := vkHandler.NewHandler(cfg.VkSecureKey)
 	meHandler := me.NewMeHandler()

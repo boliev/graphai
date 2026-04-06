@@ -8,6 +8,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
 	github.com/SevereCloud/vksdk/v2 v2.17.0 // indirect
 	github.com/go-chi/chi/v5 v5.2.5 // indirect
+	github.com/go-chi/cors v1.2.2 // indirect
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1 // indirect
 	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
