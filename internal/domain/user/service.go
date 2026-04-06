@@ -28,3 +28,7 @@ func (s *Service) ReduceCredits(ctx context.Context, user *User) error {
 
 	return s.repo.ReduceCredits(ctx, user.ID)
 }
+
+func (s *Service) FindByVKID(ctx context.Context, id int64) (*User, error) {
+	return s.repo.FindByVKID(ctx, id)
+}

@@ -2,19 +2,41 @@ package me
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+
+	"github.com/boliev/graphai/internal/domain/user"
+	"github.com/boliev/graphai/internal/pkg/vkHelper"
 )
 
 type MeHandler struct {
+	userService *user.Service
+	vkSecureKey string
 }
 
-func NewMeHandler() *MeHandler {
-	return &MeHandler{}
+func NewMeHandler(userService *user.Service, vkSecureKey string) *MeHandler {
+	return &MeHandler{
+		userService: userService,
+		vkSecureKey: vkSecureKey,
+	}
 }
 
 func (h *MeHandler) Balance(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	VKUserID, err := vkHelper.GetVKUserID(r, h.vkSecureKey)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		log.Printf("error while requesting balance %v", err.Error())
+		return
+	}
+	u, err := h.userService.FindByVKID(ctx, VKUserID)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		log.Printf("error while fetching user for balance %v", err.Error())
+		return
+	}
 	h.writeJSON(w, http.StatusOK, map[string]any{
-		"balance": 50,
+		"balance": u.Credits,
 	})
 	return
 }
