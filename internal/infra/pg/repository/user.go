@@ -18,9 +18,9 @@ func NewUserRepo(pool *pgxpool.Pool) *UserRepo {
 
 func (u *UserRepo) Upsert(ctx context.Context, usr *user.User) (*user.User, error) {
 	var newUser user.User
-	sql := "INSERT INTO users (user_vk_id, peer_id) VALUES ($1, $2) ON CONFLICT (user_vk_id) DO UPDATE SET peer_id = EXCLUDED.peer_id, last_action = now() RETURNING id, user_vk_id, peer_id, balance, free_usages, last_action, last_notify, created_at"
+	sql := "INSERT INTO users (user_vk_id, peer_id) VALUES ($1, $2) ON CONFLICT (user_vk_id) DO UPDATE SET peer_id = EXCLUDED.peer_id, last_action = now() RETURNING id, user_vk_id, peer_id, credits, last_action, last_notify, created_at"
 	row := u.pool.QueryRow(ctx, sql, usr.UserVKID, usr.PeerID)
-	err := row.Scan(&newUser.ID, &newUser.UserVKID, &newUser.PeerID, &newUser.Balance, &newUser.FreeUsages, &newUser.LastAction, &newUser.LastNotify, &newUser.CreatedAt)
+	err := row.Scan(&newUser.ID, &newUser.UserVKID, &newUser.PeerID, &newUser.Credits, &newUser.LastAction, &newUser.LastNotify, &newUser.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -28,10 +28,10 @@ func (u *UserRepo) Upsert(ctx context.Context, usr *user.User) (*user.User, erro
 }
 
 func (u *UserRepo) FindByVKID(ctx context.Context, id int64) (*user.User, error) {
-	sql := "SELECT id, user_vk_id, peer_id, balance, free_usages, last_action, last_notify, created_at FROM users WHERE user_vk_id=$1"
+	sql := "SELECT id, user_vk_id, peer_id, credits, last_action, last_notify, created_at FROM users WHERE user_vk_id=$1"
 	row := u.pool.QueryRow(ctx, sql, id)
 	var usr user.User
-	err := row.Scan(&usr.ID, &usr.UserVKID, &usr.PeerID, &usr.Balance, &usr.FreeUsages, &usr.LastAction, &usr.LastNotify, &usr.CreatedAt)
+	err := row.Scan(&usr.ID, &usr.UserVKID, &usr.PeerID, &usr.Credits, &usr.LastAction, &usr.LastNotify, &usr.CreatedAt)
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -41,8 +41,8 @@ func (u *UserRepo) FindByVKID(ctx context.Context, id int64) (*user.User, error)
 	return &usr, nil
 }
 
-func (u *UserRepo) ReduceFreeUsages(ctx context.Context, id int64) error {
-	sql := "UPDATE users SET free_usages=(free_usages-1) WHERE id=$1"
+func (u *UserRepo) ReduceCredits(ctx context.Context, id int64) error {
+	sql := "UPDATE users SET credits=(credits-1) WHERE id=$1"
 	_, err := u.pool.Exec(ctx, sql, id)
 	return err
 }

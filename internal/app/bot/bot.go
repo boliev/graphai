@@ -7,7 +7,7 @@ import (
 	"sync"
 
 	"github.com/SevereCloud/vksdk/v2/api"
-	"github.com/boliev/graphai/internal/domain/transactions"
+	"github.com/boliev/graphai/internal/domain/prompt"
 	"github.com/boliev/graphai/internal/domain/user"
 	"github.com/boliev/graphai/internal/domain/vk"
 	"github.com/boliev/graphai/internal/infra/pg/repository"
@@ -28,7 +28,10 @@ func (b *Bot) Start() error {
 	fmt.Println("Bot is running")
 
 	ctx := context.Background()
-	cfg := config.New()
+	cfg, err := config.New()
+	if err != nil {
+		panic(err)
+	}
 
 	aiClient, err := gemini.NewGemini(ctx, cfg.GeminiToken)
 	if err != nil {
@@ -46,10 +49,10 @@ func (b *Bot) Start() error {
 	userRepo := repository.NewUserRepo(pool)
 	userService := user.NewService(userRepo)
 
-	txRepo := repository.NewTransactionsRepo(pool)
-	txService := transactions.NewService(txRepo)
+	txRepo := repository.NewPromptsRepo(pool)
+	promptsService := prompt.NewService(txRepo)
 
-	vkProcessor := vk.NewProcessor(cfg.VKGroupToken, vkSender, aiClient, userService, txService)
+	vkProcessor := vk.NewProcessor(cfg.VKGroupToken, vkSender, aiClient, userService, promptsService)
 
 	wg := sync.WaitGroup{}
 

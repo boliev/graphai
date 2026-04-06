@@ -9,7 +9,7 @@ import (
 	"github.com/SevereCloud/vksdk/v2/events"
 	"github.com/SevereCloud/vksdk/v2/object"
 	"github.com/boliev/graphai/internal/domain"
-	"github.com/boliev/graphai/internal/domain/transactions"
+	"github.com/boliev/graphai/internal/domain/prompt"
 	"github.com/boliev/graphai/internal/domain/user"
 )
 
@@ -22,16 +22,16 @@ type Processor struct {
 	sender      *Sender
 	aiClient    ai
 	userService *user.Service
-	txService   *transactions.Service
+	txService   *prompt.Service
 }
 
-func NewProcessor(token string, sender *Sender, ai ai, userService *user.Service, txService *transactions.Service) *Processor {
+func NewProcessor(token string, sender *Sender, ai ai, userService *user.Service, proptsService *prompt.Service) *Processor {
 	return &Processor{
 		token:       token,
 		sender:      sender,
 		aiClient:    ai,
 		userService: userService,
-		txService:   txService,
+		txService:   proptsService,
 	}
 }
 
@@ -60,12 +60,7 @@ func (p Processor) Run() error {
 			return
 		}
 
-		hasBalance := false
-		if user.FreeUsages > 0 {
-			hasBalance = true
-		}
-
-		if !hasBalance {
+		if !user.HasBalance() {
 			p.sender.NotEnoughMoney(user.PeerID)
 			return
 		}
@@ -104,20 +99,18 @@ func (p Processor) Run() error {
 			return
 		}
 
-		if user.FreeUsages > 0 {
-			err = p.userService.ReduceFreeUsages(ctx, user)
+		if user.HasBalance() {
+			err = p.userService.ReduceCredits(ctx, user)
 			if err != nil {
-				log.Printf("userService.ReduceFreeUsages() failed: %v", err)
+				log.Printf("userService.ReduceCredits() failed: %v", err)
 				return
 			}
 
-			transaction := &transactions.Transaction{
-				UserID:        user.ID,
-				Prompt:        msg.Text,
-				OperationType: transactions.OPERATION_TYPE_FREE_USAGE,
-				Amount:        0,
+			pr := &prompt.Prompt{
+				UserID: user.ID,
+				Prompt: msg.Text,
 			}
-			err := p.txService.Create(ctx, transaction)
+			err := p.txService.Create(ctx, pr)
 			if err != nil {
 				log.Printf("txService.Create() failed: %v", err)
 				return
@@ -145,9 +138,13 @@ func (p *Processor) command(msg object.MessagesMessage) error {
 
 	switch c.Cmd {
 	case "prices":
-		p.sender.prices(int64(msg.PeerID))
+		err = p.sender.prices(int64(msg.PeerID))
 	default:
-		p.sender.help(int64(msg.PeerID))
+		err = p.sender.help(int64(msg.PeerID))
+	}
+
+	if err != nil {
+		return err
 	}
 
 	return nil

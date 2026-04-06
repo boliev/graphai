@@ -22,18 +22,20 @@ const HELP_MESSAGE = `Пришлите фото и напишите, что хо
 Чем понятнее описание, тем лучше результат ✨`
 
 const PRICES_MESSAGE = `первое фото бесплатно
- - 1 фото — 99 ₽
- - 3 фото — 249 ₽
- - 5 фото — 349 ₽`
+ - 1 фото — 10 Голосов
+ - 5 фото — 45 Голосов
+ - 10 фото — 80 Голосов
+ - 25 фото — 200 Голосов`
 
 const NOT_ENOUGH_MONEY_MESSAGE = `Похоже, бесплатная первая обработка уже использована ✨
-Сейчас на балансе недостаточно средств для новой обработки.
+Сейчас на балансе недостаточно кредитов для новой обработки.
 Пополните баланс, и я с радостью помогу подготовить для вас красивый результат 💖`
 
 type Sender struct {
 	vk            *api.VK
 	groupID       int
 	communityLink string
+	paymentAppID  int64
 }
 
 func NewSender(vk *api.VK, cfg *config.Cfg) *Sender {
@@ -49,6 +51,7 @@ func NewSender(vk *api.VK, cfg *config.Cfg) *Sender {
 		vk:            vk,
 		groupID:       groupResp[0].ID,
 		communityLink: cfg.CommunityLink,
+		paymentAppID:  cfg.PaymentAppID,
 	}
 }
 
@@ -184,16 +187,16 @@ func (s *Sender) uploadMessagesPhoto(peerID int64, photo []byte) (api.PhotosSave
 	return resultPhoto, nil
 }
 
-func (s *Sender) help(peerID int64) {
-	s.sendText(peerID, HELP_MESSAGE)
+func (s *Sender) help(peerID int64) error {
+	return s.sendText(peerID, HELP_MESSAGE)
 }
 
-func (s *Sender) prices(peerID int64) {
-	s.sendText(peerID, PRICES_MESSAGE)
+func (s *Sender) prices(peerID int64) error {
+	return s.sendText(peerID, PRICES_MESSAGE)
 }
 
-func (s *Sender) NotEnoughMoney(peerID int64) {
-	s.sendText(peerID, NOT_ENOUGH_MONEY_MESSAGE)
+func (s *Sender) NotEnoughMoney(peerID int64) error {
+	return s.sendText(peerID, NOT_ENOUGH_MONEY_MESSAGE)
 }
 
 func (s *Sender) KB(inline bool) (string, error) {
@@ -202,6 +205,7 @@ func (s *Sender) KB(inline bool) (string, error) {
 		Label   string `json:"label"`
 		Payload string `json:"payload,omitempty"`
 		Link    string `json:"link,omitempty"`
+		AppID   int64  `json:"app_id,omitempty"`
 	}
 
 	type Button struct {
@@ -247,11 +251,10 @@ func (s *Sender) KB(inline bool) (string, error) {
 				},
 				{
 					Action: Action{
-						Type:    "text",
-						Label:   "💳 Оплатить",
-						Payload: `{"cmd":"pay"}`,
+						Type:  "open_app",
+						Label: "💳 Оплатить",
+						AppID: s.paymentAppID,
 					},
-					Color: "positive",
 				},
 			},
 		},

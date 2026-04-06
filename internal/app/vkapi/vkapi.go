@@ -23,7 +23,10 @@ func NewVKApi() *VKApi {
 
 func (v *VKApi) Run() {
 
-	cfg := config.New()
+	cfg, err := config.New()
+	if err != nil {
+		panic(err)
+	}
 	v.startServer(cfg)
 }
 
