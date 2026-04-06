@@ -32,7 +32,7 @@ func (v *VKApi) startServer(cfg *config.Cfg) {
 	meHandler := me.NewMeHandler()
 
 	r.Post("/api/v1/vk", vk.Callback)
-	r.Post("/api/v1/me/balance", meHandler.Balance)
+	r.Get("/api/v1/me/balance", meHandler.Balance)
 
 	port, err := strconv.Atoi(cfg.VKApiPort)
 	if err != nil {
