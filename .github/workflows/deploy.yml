@@ -57,9 +57,21 @@ jobs:
         run: |
           RELEASE_ID="${{ github.event.release.tag_name }}"
           echo "RELEASE_ID=$RELEASE_ID" >> $GITHUB_ENV
-
           ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "mkdir -p /opt/$APP_NAME/releases/$RELEASE_ID"
           scp -P "$SSH_PORT" dist-vk-api/${APP_NAME} "$SSH_USER@$SSH_HOST:/opt/$APP_NAME/releases/$RELEASE_ID/${APP_NAME}"
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "mkdir -p /opt/$APP_NAME/releases/$RELEASE_ID/migrations"
+          scp -P "$SSH_PORT" migrations/*.sql "$SSH_USER@$SSH_HOST:/opt/$APP_NAME/releases/$RELEASE_ID/migrations/"
+
+      - name: Run VK API migrations
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST_RU }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          APP_NAME: ${{ secrets.APP_NAME_VK_API }}
+          RELEASE_ID: ${{ github.event.release.tag_name }}
+          DB_URL: ${{ secrets.DB_URL }}
+        run: |
+          ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "migrate -path /opt/$APP_NAME/releases/$RELEASE_ID/migrations -database '$DB_URL' up"
 
       - name: Activate VK API release and restart
         env:
