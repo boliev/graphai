@@ -83,8 +83,16 @@ func (p Processor) Run() error {
 
 		resp, err := p.aiClient.Send(ctx, msg.Text, photoURLs)
 		if err != nil {
-			log.Printf("ai.Send() failed: %v", err)
-			return
+			log.Printf("ai.Send() 1 failed: %v", err)
+			resp, err = p.aiClient.Send(ctx, msg.Text, photoURLs)
+			if err != nil {
+				log.Printf("ai.Send() 2 failed: %v", err)
+				resp, err = p.aiClient.Send(ctx, msg.Text, photoURLs)
+				if err != nil {
+					log.Printf("ai.Send() 3 failed: %v", err)
+					return
+				}
+			}
 		}
 
 		resultPhoto, err := p.sender.uploadMessagesPhoto(int64(msg.PeerID), resp.Photo)
