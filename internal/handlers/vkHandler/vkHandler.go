@@ -112,6 +112,16 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 		log.Printf("user %v doesn't exists", vkUserID)
 		return
 	}
+	if usr == nil {
+		usr, err = h.userService.Upsert(ctx, &user.User{
+			UserVKID: vkUserID,
+			PeerID:   0,
+		})
+		if err != nil {
+			h.writeVKError(w, http.StatusBadRequest, 100, "user doesn't exists", true)
+			log.Printf("cannot create user for UserVkID: %d. %v", vkUserID, err)
+		}
+	}
 
 	itemID, err := strconv.ParseInt(form["item_id"], 10, 64)
 	if err != nil {
