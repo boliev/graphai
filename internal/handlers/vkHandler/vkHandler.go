@@ -147,15 +147,8 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 	}
 
 	if ord != nil {
-		vkOrderId, err := strconv.ParseInt(ord.VkOrderID, 10, 64)
-		if err != nil {
-			h.writeVKError(w, http.StatusBadRequest, 100, "invalid order_id", true)
-			log.Printf("invalid order_id: %s", ord.VkOrderID)
-			return
-		}
-
 		var resp vkSuccessChargeable
-		resp.Response.OrderID = vkOrderId
+		resp.Response.OrderID = ord.VkOrderID
 		resp.Response.AppOrderID = ord.ID
 
 		h.writeJSON(w, http.StatusOK, resp)
@@ -169,7 +162,7 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 	}
 
 	newOrder, err := h.orderService.UpsertTx(ctx, tx, &order.Order{
-		VkOrderID: strconv.FormatInt(orderID, 10),
+		VkOrderID: orderID,
 		UserID:    usr.ID,
 		Product:   product.Name,
 	})

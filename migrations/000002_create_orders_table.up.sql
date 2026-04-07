@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS orders (
     id BIGSERIAL PRIMARY KEY,
-    vk_order_id TEXT NOT NULL UNIQUE ,
+    vk_order_id BIGINT NOT NULL UNIQUE ,
     user_id BIGINT NOT NULL REFERENCES users(id),
     product TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
