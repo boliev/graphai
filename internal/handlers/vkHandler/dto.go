@@ -10,7 +10,7 @@ type vkError struct {
 
 type vkSuccessGetItem struct {
 	Response struct {
-		ItemID   int    `json:"item_id"`
+		ItemID   int64  `json:"item_id"`
 		Title    string `json:"title"`
 		PhotoURL string `json:"photo_url,omitempty"`
 		Price    int    `json:"price"`

@@ -3,6 +3,8 @@ package user
 import (
 	"context"
 	"fmt"
+
+	"github.com/jackc/pgx/v5"
 )
 
 type Service struct {
@@ -27,6 +29,10 @@ func (s *Service) ReduceCredits(ctx context.Context, user *User) error {
 	}
 
 	return s.repo.ReduceCredits(ctx, user.ID)
+}
+
+func (s *Service) IncreaseCreditsTx(ctx context.Context, tx pgx.Tx, userID int64, credits int64) error {
+	return s.repo.IncreaseCreditsTx(ctx, tx, userID, credits)
 }
 
 func (s *Service) FindByVKID(ctx context.Context, id int64) (*User, error) {

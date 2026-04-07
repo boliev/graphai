@@ -1,23 +1,37 @@
 package vkHandler
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"math/rand"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/boliev/graphai/internal/domain/order"
+	"github.com/boliev/graphai/internal/domain/user"
+	"github.com/jackc/pgx/v5"
 )
 
+type txManager interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
 type Handler struct {
-	vkSecureKey string
+	vkSecureKey  string
+	txManager    txManager
+	orderService *order.Service
+	userService  *user.Service
 }
 
-func NewHandler(vkSecureKey string) *Handler {
+func NewHandler(vkSecureKey string, txManager txManager, orderService *order.Service, userService *user.Service) *Handler {
 	return &Handler{
-		vkSecureKey: vkSecureKey,
+		vkSecureKey:  vkSecureKey,
+		txManager:    txManager,
+		orderService: orderService,
+		userService:  userService,
 	}
 }
 
@@ -71,6 +85,7 @@ func (h *Handler) handleGetItem(w http.ResponseWriter, form map[string]string) {
 }
 
 func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string]string) {
+	ctx := context.Background()
 	// Обычно нас интересует только chargeable.
 	// Именно здесь нужно атомарно выдать товар/кредиты пользователю.
 	status := form["status"]
@@ -85,9 +100,16 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 		return
 	}
 
-	userID, err := strconv.ParseInt(form["user_id"], 10, 64)
+	vkUserID, err := strconv.ParseInt(form["user_id"], 10, 64)
 	if err != nil {
 		h.writeVKError(w, http.StatusBadRequest, 100, "invalid user_id", true)
+		return
+	}
+
+	usr, err := h.userService.FindByVKID(ctx, vkUserID)
+	if err != nil {
+		h.writeVKError(w, http.StatusBadRequest, 100, "user doesn't exists", true)
+		log.Printf("user %v doesn't exists", vkUserID)
 		return
 	}
 
@@ -97,35 +119,76 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 		return
 	}
 
-	// КРИТИЧНО:
-	// VK может ретраить order_status_change для того же order_id.
-	// Значит обработка должна быть ИДЕМПОТЕНТНОЙ.
-	//
-	// Ниже псевдологика:
-	//
-	// 1. Начать транзакцию
-	// 2. Найти платеж по vk_order_id = orderID
-	// 3. Если уже есть:
-	//      вернуть тот же app_order_id, что возвращали раньше
-	// 4. Если нет:
-	//      - проверить товар
-	//      - начислить пользователю баланс/кредиты
-	//      - сохранить платеж и app_order_id
-	// 5. Commit
-	//
-	// Здесь просто заглушка:
-	//appOrderID, err := processPurchaseIdempotently(orderID, userID, itemID)
-	//if err != nil {
-	//	h.writeVKError(w, http.StatusOK, 100, "failed to process order", true)
-	//	return
-	//}
-	_ = userID
-	_ = itemID
+	product := getProductById(itemID)
+	if product == nil {
+		h.writeVKError(w, http.StatusOK, 20, "item not found", true)
+		log.Printf("item %d not found", itemID)
+		return
+	}
 
-	appOrderID := int64(rand.Intn(1000))
+	tx, err := h.txManager.Begin(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil {
+			log.Printf("failed to rollback transaction: %s", err)
+		}
+	}()
+
+	if err != nil {
+		h.writeVKError(w, http.StatusInternalServerError, 100, "error begin transaction", true)
+		log.Printf("error begin transaction: %s", err.Error())
+		return
+	}
+
+	ord, err := h.orderService.GetOrderByVkOrderIdTx(ctx, tx, orderID)
+	if err != nil {
+		h.writeVKError(w, http.StatusInternalServerError, 100, "error get order", true)
+		log.Printf("error get order %d: %s", orderID, err.Error())
+		return
+	}
+
+	if ord != nil {
+		vkOrderId, err := strconv.ParseInt(ord.VkOrderID, 10, 64)
+		if err != nil {
+			h.writeVKError(w, http.StatusBadRequest, 100, "invalid order_id", true)
+			log.Printf("invalid order_id: %d", ord.VkOrderID)
+			return
+		}
+
+		var resp vkSuccessChargeable
+		resp.Response.OrderID = vkOrderId
+		resp.Response.AppOrderID = ord.ID
+
+		h.writeJSON(w, http.StatusOK, resp)
+	}
+
+	err = h.userService.IncreaseCreditsTx(ctx, tx, usr.ID, product.Credits)
+	if err != nil {
+		h.writeVKError(w, http.StatusInternalServerError, 100, "error increase credits", true)
+		log.Printf("error increase credits for user %d: %s", usr.ID, err.Error())
+		return
+	}
+
+	newOrder, err := h.orderService.UpsertTx(ctx, tx, &order.Order{
+		VkOrderID: string(orderID),
+		UserID:    usr.ID,
+		Product:   product.Name,
+	})
+
+	if err != nil {
+		h.writeVKError(w, http.StatusInternalServerError, 100, "error upsert order", true)
+		log.Printf("error upsert order: %s", err.Error())
+		return
+	}
+	err = tx.Commit(ctx)
+	if err != nil {
+		h.writeVKError(w, http.StatusInternalServerError, 100, "error commit transaction", true)
+		log.Printf("error commit transaction: %s", err.Error())
+		return
+	}
+
 	var resp vkSuccessChargeable
 	resp.Response.OrderID = orderID
-	resp.Response.AppOrderID = appOrderID
+	resp.Response.AppOrderID = newOrder.ID
 
 	h.writeJSON(w, http.StatusOK, resp)
 }

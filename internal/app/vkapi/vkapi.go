@@ -8,9 +8,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/boliev/graphai/internal/domain/order"
 	"github.com/boliev/graphai/internal/domain/user"
 	"github.com/boliev/graphai/internal/handlers/me"
 	"github.com/boliev/graphai/internal/handlers/vkHandler"
+	"github.com/boliev/graphai/internal/infra/pg"
 	"github.com/boliev/graphai/internal/infra/pg/repository"
 	"github.com/boliev/graphai/internal/pkg/config"
 	"github.com/go-chi/chi/v5"
@@ -65,11 +67,16 @@ func (v *VKApi) startServer(cfg *config.Cfg) {
 		panic(err)
 	}
 
-	vk := vkHandler.NewHandler(cfg.VkSecureKey)
+	txManager := pg.NewTxManager(pool)
 
 	userRepo := repository.NewUserRepo(pool)
 	userService := user.NewService(userRepo)
 	meHandler := me.NewMeHandler(userService, cfg.VkSecureKey)
+
+	txOrderRepo := repository.NewOrderTxRepo()
+	orderService := order.NewService(txOrderRepo)
+
+	vk := vkHandler.NewHandler(cfg.VkSecureKey, txManager, orderService, userService)
 
 	r.Post("/api/v1/vk", vk.Callback)
 	r.Get("/api/v1/me/balance", meHandler.Balance)

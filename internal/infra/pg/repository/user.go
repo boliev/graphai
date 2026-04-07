@@ -46,3 +46,9 @@ func (u *UserRepo) ReduceCredits(ctx context.Context, id int64) error {
 	_, err := u.pool.Exec(ctx, sql, id)
 	return err
 }
+
+func (u *UserRepo) IncreaseCreditsTx(ctx context.Context, tx pgx.Tx, id int64, credits int64) error {
+	sql := "UPDATE users SET credits=(credits+$1) WHERE id=$2"
+	_, err := tx.Exec(ctx, sql, credits, id)
+	return err
+}
