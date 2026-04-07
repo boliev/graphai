@@ -150,7 +150,7 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 		vkOrderId, err := strconv.ParseInt(ord.VkOrderID, 10, 64)
 		if err != nil {
 			h.writeVKError(w, http.StatusBadRequest, 100, "invalid order_id", true)
-			log.Printf("invalid order_id: %d", ord.VkOrderID)
+			log.Printf("invalid order_id: %s", ord.VkOrderID)
 			return
 		}
 
@@ -169,7 +169,7 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 	}
 
 	newOrder, err := h.orderService.UpsertTx(ctx, tx, &order.Order{
-		VkOrderID: string(orderID),
+		VkOrderID: strconv.FormatInt(orderID, 10),
 		UserID:    usr.ID,
 		Product:   product.Name,
 	})
