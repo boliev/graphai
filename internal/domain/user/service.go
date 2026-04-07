@@ -16,7 +16,7 @@ func NewService(repo Repository) *Service {
 }
 
 func (s *Service) Upsert(ctx context.Context, user *User) (*User, error) {
-	if user == nil || user.PeerID == 0 || user.UserVKID == 0 {
+	if user == nil || user.UserVKID == 0 {
 		return nil, fmt.Errorf("invalid user")
 	}
 
