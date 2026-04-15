@@ -5,7 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"sort"
 	"strconv"
@@ -24,14 +24,16 @@ type Handler struct {
 	txManager    txManager
 	orderService *order.Service
 	userService  *user.Service
+	logger       *slog.Logger
 }
 
-func NewHandler(vkSecureKey string, txManager txManager, orderService *order.Service, userService *user.Service) *Handler {
+func NewHandler(vkSecureKey string, txManager txManager, orderService *order.Service, userService *user.Service, logger *slog.Logger) *Handler {
 	return &Handler{
 		vkSecureKey:  vkSecureKey,
 		txManager:    txManager,
 		orderService: orderService,
 		userService:  userService,
+		logger:       logger,
 	}
 }
 
@@ -109,7 +111,7 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 	usr, err := h.userService.FindByVKID(ctx, vkUserID)
 	if err != nil {
 		h.writeVKError(w, http.StatusBadRequest, 100, "user doesn't exists", true)
-		log.Printf("user %v doesn't exists", vkUserID)
+		h.logger.Error("cannot get user", "error", err, "vkUserID", vkUserID)
 		return
 	}
 	if usr == nil {
@@ -119,7 +121,7 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 		})
 		if err != nil {
 			h.writeVKError(w, http.StatusBadRequest, 100, "user doesn't exists", true)
-			log.Printf("cannot create user for UserVkID: %d. %v", vkUserID, err)
+			h.logger.Error("cannot create user", "error", err, "vkUserID", vkUserID)
 		}
 	}
 
@@ -132,27 +134,28 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 	product := getProductById(itemID)
 	if product == nil {
 		h.writeVKError(w, http.StatusOK, 20, "item not found", true)
-		log.Printf("item %d not found", itemID)
+		h.logger.Error("item not found", "itemID", itemID)
+
 		return
 	}
 
 	tx, err := h.txManager.Begin(ctx)
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil {
-			log.Printf("failed to rollback transaction: %s", err)
+			h.logger.Error("failed to rollback transaction", "error", err)
 		}
 	}()
 
 	if err != nil {
-		h.writeVKError(w, http.StatusInternalServerError, 100, "error begin transaction", true)
-		log.Printf("error begin transaction: %s", err.Error())
+		h.writeVKError(w, http.StatusInternalServerError, 100, "failed to start transaction", true)
+		h.logger.Error("failed to start transaction", "error", err)
 		return
 	}
 
 	ord, err := h.orderService.GetOrderByVkOrderIdTx(ctx, tx, orderID)
 	if err != nil {
 		h.writeVKError(w, http.StatusInternalServerError, 100, "error get order", true)
-		log.Printf("error get order %d: %s", orderID, err.Error())
+		h.logger.Error("failed to get order", "error", err, "orderID", orderID)
 		return
 	}
 
@@ -167,7 +170,7 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 	err = h.userService.IncreaseCreditsTx(ctx, tx, usr.ID, product.Credits)
 	if err != nil {
 		h.writeVKError(w, http.StatusInternalServerError, 100, "error increase credits", true)
-		log.Printf("error increase credits for user %d: %s", usr.ID, err.Error())
+		h.logger.Error("failed to increase credits for user", "user", usr.ID, "vkUserID", usr.UserVKID, "error", err.Error())
 		return
 	}
 
@@ -179,13 +182,13 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 
 	if err != nil {
 		h.writeVKError(w, http.StatusInternalServerError, 100, "error upsert order", true)
-		log.Printf("error upsert order: %s", err.Error())
+		h.logger.Error("error upsert order", "error", err.Error())
 		return
 	}
 	err = tx.Commit(ctx)
 	if err != nil {
 		h.writeVKError(w, http.StatusInternalServerError, 100, "error commit transaction", true)
-		log.Printf("error commit transaction: %s", err.Error())
+		h.logger.Error("failed to commit transaction", "error", err)
 		return
 	}
 

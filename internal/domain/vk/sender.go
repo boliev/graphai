@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/SevereCloud/vksdk/v2/api"
@@ -36,15 +36,16 @@ type Sender struct {
 	groupID       int
 	communityLink string
 	paymentAppID  int64
+	log           *slog.Logger
 }
 
-func NewSender(vk *api.VK, cfg *config.Cfg) *Sender {
+func NewSender(vk *api.VK, cfg *config.Cfg, log *slog.Logger) (*Sender, error) {
 	groupResp, err := vk.GroupsGetByID(api.Params{})
 	if err != nil {
-		log.Fatalf("groups.getById failed: %v", err)
+		return nil, fmt.Errorf("groups.getById failed: %v", err)
 	}
 	if len(groupResp) == 0 {
-		log.Fatal("groups.getById returned empty response")
+		return nil, fmt.Errorf("groups.getById returned empty response")
 	}
 
 	return &Sender{
@@ -52,7 +53,8 @@ func NewSender(vk *api.VK, cfg *config.Cfg) *Sender {
 		groupID:       groupResp[0].ID,
 		communityLink: cfg.CommunityLink,
 		paymentAppID:  cfg.PaymentAppID,
-	}
+		log:           log,
+	}, nil
 }
 
 func (s *Sender) send(peerID int, messageID, ownerID int, photoID int) error {
@@ -175,13 +177,13 @@ func (s *Sender) getLP() (*longpoll.LongPoll, error) {
 func (s *Sender) uploadMessagesPhoto(peerID int64, photo []byte) (api.PhotosSaveMessagesPhotoResponse, error) {
 	resultPhoto, err := s.vk.UploadMessagesPhoto(int(peerID), bytes.NewReader(photo))
 	if err != nil {
-		log.Printf("upload messages photo: %v", err)
+		s.log.Warn("upload vk messages photo", "error", err)
 		return nil, err
 	}
 
 	if len(resultPhoto) == 0 {
-		log.Printf("upload messages photo returned empty response")
-		return nil, fmt.Errorf("upload messages photo returned empty response")
+		s.log.Warn("upload vk messages photo return empty response", "error", err)
+		return nil, err
 	}
 
 	return resultPhoto, nil

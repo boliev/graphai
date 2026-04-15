@@ -3,8 +3,9 @@ package vkapi
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"time"
 
@@ -28,15 +29,17 @@ func NewVKApi() *VKApi {
 }
 
 func (v *VKApi) Run() {
-
 	cfg, err := config.New()
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})).With("project", "graphai", "service", "vkapi")
 	if err != nil {
 		panic(err)
 	}
-	v.startServer(cfg)
+	v.startServer(cfg, logger)
 }
 
-func (v *VKApi) startServer(cfg *config.Cfg) {
+func (v *VKApi) startServer(cfg *config.Cfg, logger *slog.Logger) {
 	ctx := context.Background()
 	r := chi.NewRouter()
 
@@ -71,21 +74,25 @@ func (v *VKApi) startServer(cfg *config.Cfg) {
 
 	userRepo := repository.NewUserRepo(pool)
 	userService := user.NewService(userRepo)
-	meHandler := me.NewMeHandler(userService, cfg.VkSecureKey)
+	meHandler := me.NewMeHandler(userService, cfg.VkSecureKey, logger)
 
 	txOrderRepo := repository.NewOrderTxRepo()
 	orderService := order.NewService(txOrderRepo)
 
-	vk := vkHandler.NewHandler(cfg.VkSecureKey, txManager, orderService, userService)
+	vk := vkHandler.NewHandler(cfg.VkSecureKey, txManager, orderService, userService, logger)
 
 	r.Post("/api/v1/vk", vk.Callback)
 	r.Get("/api/v1/me/balance", meHandler.Balance)
 
 	port, err := strconv.Atoi(cfg.VKApiPort)
 	if err != nil {
-		log.Fatal(err)
+		logger.Error("starting server: cannot convert port to int", "error", err)
+		panic(err)
 	}
 
-	log.Println(fmt.Sprintf("listen :%d", port))
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), r))
+	logger.Info("starting server", "port", port)
+	err = http.ListenAndServe(fmt.Sprintf(":%d", port), r)
+	if err != nil {
+		logger.Error("server failed", "error", err)
+	}
 }

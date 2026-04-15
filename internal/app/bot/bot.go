@@ -2,8 +2,8 @@ package bot
 
 import (
 	"context"
-	"fmt"
-	"log"
+	"log/slog"
+	"os"
 	"sync"
 
 	"github.com/SevereCloud/vksdk/v2/api"
@@ -13,7 +13,6 @@ import (
 	"github.com/boliev/graphai/internal/infra/pg/repository"
 	"github.com/boliev/graphai/internal/pkg/config"
 	"github.com/boliev/graphai/internal/pkg/gemini"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -25,24 +24,34 @@ func New() *Bot {
 }
 
 func (b *Bot) Start() error {
-	fmt.Println("Bot is running")
-
 	ctx := context.Background()
 	cfg, err := config.New()
 	if err != nil {
 		panic(err)
 	}
 
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})).With("project", "graphai", "service", "vkBot")
+
+	logger.Info("Bot is running")
+
 	aiClient, err := gemini.NewGemini(ctx, cfg.GeminiToken)
 	if err != nil {
+		logger.Error(err.Error())
 		panic(err)
 	}
 
 	vkApi := api.NewVK(cfg.VKGroupToken)
-	vkSender := vk.NewSender(vkApi, cfg)
+	vkSender, err := vk.NewSender(vkApi, cfg, logger)
+	if err != nil {
+		logger.Error(err.Error())
+		panic(err)
+	}
 
 	pool, err := pgxpool.New(ctx, cfg.PGConnect)
 	if err != nil {
+		logger.Error(err.Error())
 		panic(err)
 	}
 
@@ -52,7 +61,7 @@ func (b *Bot) Start() error {
 	txRepo := repository.NewPromptsRepo(pool)
 	promptsService := prompt.NewService(txRepo)
 
-	vkProcessor := vk.NewProcessor(cfg.VKGroupToken, vkSender, aiClient, userService, promptsService)
+	vkProcessor := vk.NewProcessor(cfg.VKGroupToken, vkSender, aiClient, userService, promptsService, logger)
 
 	wg := sync.WaitGroup{}
 
@@ -61,25 +70,11 @@ func (b *Bot) Start() error {
 		err := vkProcessor.Run()
 		if err != nil {
 			wg.Done()
-			log.Fatal(err)
+			logger.Error("vkProcessor failed", "error", err.Error())
 		}
 	}()
 
 	wg.Wait()
 
 	return nil
-}
-
-func (b *Bot) createTgBotApi(cfg *config.Cfg) (*tgbotapi.BotAPI, error) {
-
-	bot, err := tgbotapi.NewBotAPI(cfg.BotToken)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Printf("Authorized on account %s", bot.Self.UserName)
-
-	bot.Debug = true
-
-	return bot, nil
 }
