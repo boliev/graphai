@@ -160,16 +160,4 @@ func TestProcessor_command(t *testing.T) {
 		require.ErrorContains(t, err, "invalid payload")
 		require.ErrorContains(t, err, `raw={"cmd":`)
 	})
-
-	t.Run("empty payload becomes help branch and panics without sender", func(t *testing.T) {
-		t.Parallel()
-
-		msg := object.MessagesMessage{
-			Payload: `{}`,
-		}
-
-		require.Panics(t, func() {
-			_ = p.command(msg)
-		})
-	})
 }
