@@ -2,7 +2,9 @@ package vk
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -13,21 +15,21 @@ import (
 	"github.com/boliev/graphai/internal/pkg/config"
 )
 
-const GREET_MESSAGE = `Привет! Я помогу красиво обработать фото ✨
+const greetMessage = `Привет! Я помогу красиво обработать фото ✨
 Отправь фотографию и напиши, что хочешь изменить или добавить.
 Например: “сделай фото более нежным”, “замени фон”, “сделай красивую открытку” 💖`
 
-const HELP_MESSAGE = `Пришлите фото и напишите, что хотите изменить.
+const helpMessage = `Пришлите фото и напишите, что хотите изменить.
 Например: заменить фон, сделать фото нежнее, убрать лишнее или оформить как открытку.
 Чем понятнее описание, тем лучше результат ✨`
 
-const PRICES_MESSAGE = `первое фото бесплатно
+const pricesMessage = `первое фото бесплатно
  - 1 фото — 10 Голосов
  - 5 фото — 45 Голосов
  - 10 фото — 80 Голосов
  - 25 фото — 200 Голосов`
 
-const NOT_ENOUGH_MONEY_MESSAGE = `Похоже, бесплатная первая обработка уже использована ✨
+const notEnoughMoneyMessage = `Похоже, бесплатная первая обработка уже использована ✨
 Сейчас на балансе недостаточно кредитов для новой обработки.
 Пополните баланс, и я с радостью помогу подготовить для вас красивый результат 💖`
 
@@ -42,10 +44,11 @@ type Sender struct {
 func NewSender(vk *api.VK, cfg *config.Cfg, log *slog.Logger) (*Sender, error) {
 	groupResp, err := vk.GroupsGetByID(api.Params{})
 	if err != nil {
-		return nil, fmt.Errorf("groups.getById failed: %v", err)
+		return nil, fmt.Errorf("groups.getById failed: %w", err)
 	}
+
 	if len(groupResp) == 0 {
-		return nil, fmt.Errorf("groups.getById returned empty response")
+		return nil, errors.New("groups.getById returned empty response")
 	}
 
 	return &Sender{
@@ -57,13 +60,14 @@ func NewSender(vk *api.VK, cfg *config.Cfg, log *slog.Logger) (*Sender, error) {
 	}, nil
 }
 
-func (s *Sender) send(peerID int, messageID, ownerID int, photoID int) error {
+func (s *Sender) send(peerID, messageID, ownerID, photoID int) error {
 	attachment := fmt.Sprintf("photo%d_%d", ownerID, photoID)
 
 	kb, err := s.KB(false)
 	if err != nil {
 		return err
 	}
+
 	_, err = s.vk.MessagesSend(api.Params{
 		"peer_id":    peerID,
 		"random_id":  time.Now().UnixNano(),
@@ -77,11 +81,11 @@ func (s *Sender) send(peerID int, messageID, ownerID int, photoID int) error {
 }
 
 func (s *Sender) sendText(peerID int64, text string) error {
-
 	kb, err := s.KB(true)
 	if err != nil {
 		return err
 	}
+
 	_, err = s.vk.MessagesSend(api.Params{
 		"peer_id":   peerID,
 		"random_id": time.Now().UnixNano(),
@@ -97,10 +101,11 @@ func (s *Sender) sendKB(peerID int) error {
 	if err != nil {
 		return err
 	}
+
 	_, err = s.vk.MessagesSend(api.Params{
 		"peer_id":   peerID,
 		"random_id": time.Now().UnixNano(),
-		"message":   GREET_MESSAGE,
+		"message":   greetMessage,
 		"keyboard":  kb,
 	})
 
@@ -124,13 +129,13 @@ func (s *Sender) extractPhotoURLs(attachments []object.MessagesMessageAttachment
 	return urls
 }
 
-func (s *Sender) loadFullMessage(msg object.MessagesMessage) (object.MessagesMessage, error) {
+func (s *Sender) loadFullMessage(ctx context.Context, msg object.MessagesMessage) (object.MessagesMessage, error) {
 	// Предпочтительно дочитывать по conversation_message_id внутри конкретного peer.
 	if msg.ConversationMessageID != 0 {
 		resp, err := s.vk.MessagesGetByConversationMessageID(api.Params{
 			"peer_id":                  msg.PeerID,
 			"conversation_message_ids": msg.ConversationMessageID,
-		})
+		}.WithContext(ctx))
 		if err == nil && len(resp.Items) > 0 {
 			return resp.Items[0], nil
 		}
@@ -140,22 +145,23 @@ func (s *Sender) loadFullMessage(msg object.MessagesMessage) (object.MessagesMes
 	if msg.ID != 0 {
 		resp, err := s.vk.MessagesGetByID(api.Params{
 			"message_ids": msg.ID,
-		})
+		}.WithContext(ctx))
 		if err == nil && len(resp.Items) > 0 {
 			return resp.Items[0], nil
 		}
 	}
 
-	return msg, fmt.Errorf("full message not found")
+	return msg, errors.New("full message not found")
 }
 
 func (s *Sender) getGroupId() (int, error) {
 	groupResp, err := s.vk.GroupsGetByID(api.Params{})
 	if err != nil {
-		return 0, fmt.Errorf("groups.getById failed: %v", err)
+		return 0, fmt.Errorf("groups.getById failed: %w", err)
 	}
+
 	if len(groupResp) == 0 {
-		return 0, fmt.Errorf("groups.getById returned empty response")
+		return 0, errors.New("groups.getById returned empty response")
 	}
 
 	return groupResp[0].ID, nil
@@ -166,6 +172,7 @@ func (s *Sender) getLP() (*longpoll.LongPoll, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	lp, err := longpoll.NewLongPoll(s.vk, groupID)
 	if err != nil {
 		return nil, err
@@ -190,15 +197,15 @@ func (s *Sender) uploadMessagesPhoto(peerID int64, photo []byte) (api.PhotosSave
 }
 
 func (s *Sender) help(peerID int64) error {
-	return s.sendText(peerID, HELP_MESSAGE)
+	return s.sendText(peerID, helpMessage)
 }
 
 func (s *Sender) prices(peerID int64) error {
-	return s.sendText(peerID, PRICES_MESSAGE)
+	return s.sendText(peerID, pricesMessage)
 }
 
 func (s *Sender) NotEnoughMoney(peerID int64) error {
-	return s.sendText(peerID, NOT_ENOUGH_MONEY_MESSAGE)
+	return s.sendText(peerID, notEnoughMoneyMessage)
 }
 
 func (s *Sender) KB(inline bool) (string, error) {

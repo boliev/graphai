@@ -16,8 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Bot struct {
-}
+type Bot struct{}
 
 func New() *Bot {
 	return &Bot{}
@@ -25,6 +24,7 @@ func New() *Bot {
 
 func (b *Bot) Start() error {
 	ctx := context.Background()
+
 	cfg, err := config.New()
 	if err != nil {
 		panic(err)
@@ -43,6 +43,7 @@ func (b *Bot) Start() error {
 	}
 
 	vkApi := api.NewVK(cfg.VKGroupToken)
+
 	vkSender, err := vk.NewSender(vkApi, cfg, logger)
 	if err != nil {
 		logger.Error(err.Error())
@@ -66,6 +67,7 @@ func (b *Bot) Start() error {
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
+
 	go func() {
 		err := vkProcessor.Run()
 		if err != nil {

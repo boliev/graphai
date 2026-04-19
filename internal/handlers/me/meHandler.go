@@ -9,22 +9,23 @@ import (
 	"github.com/boliev/graphai/internal/pkg/vkHelper"
 )
 
-type MeHandler struct {
+type Handler struct {
 	userService *user.Service
 	vkSecureKey string
 	logger      *slog.Logger
 }
 
-func NewMeHandler(userService *user.Service, vkSecureKey string, logger *slog.Logger) *MeHandler {
-	return &MeHandler{
+func NewHandler(userService *user.Service, vkSecureKey string, logger *slog.Logger) *Handler {
+	return &Handler{
 		userService: userService,
 		vkSecureKey: vkSecureKey,
 		logger:      logger,
 	}
 }
 
-func (h *MeHandler) Balance(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Balance(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+
 	VKUserID, err := vkHelper.GetVKUserID(r, h.vkSecureKey)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -32,19 +33,21 @@ func (h *MeHandler) Balance(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+
 	u, err := h.userService.FindByVKID(ctx, VKUserID)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		h.logger.Error("cannot get user", "error", err, "vkUserID", VKUserID)
+
 		return
 	}
+
 	h.writeJSON(w, http.StatusOK, map[string]any{
 		"balance": u.Credits,
 	})
-	return
 }
 
-func (h *MeHandler) writeJSON(w http.ResponseWriter, status int, v any) {
+func (h *Handler) writeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 

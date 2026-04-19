@@ -21,8 +21,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type VKApi struct {
-}
+type VKApi struct{}
 
 func NewVKApi() *VKApi {
 	return &VKApi{}
@@ -33,9 +32,11 @@ func (v *VKApi) Run() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: slog.LevelInfo,
 	})).With("project", "graphai", "service", "vkapi")
+
 	if err != nil {
 		panic(err)
 	}
+
 	v.startServer(cfg, logger)
 }
 
@@ -74,7 +75,7 @@ func (v *VKApi) startServer(cfg *config.Cfg, logger *slog.Logger) {
 
 	userRepo := repository.NewUserRepo(pool)
 	userService := user.NewService(userRepo)
-	meHandler := me.NewMeHandler(userService, cfg.VkSecureKey, logger)
+	meHandler := me.NewHandler(userService, cfg.VkSecureKey, logger)
 
 	txOrderRepo := repository.NewOrderTxRepo()
 	orderService := order.NewService(txOrderRepo)
@@ -91,6 +92,7 @@ func (v *VKApi) startServer(cfg *config.Cfg, logger *slog.Logger) {
 	}
 
 	logger.Info("starting server", "port", port)
+
 	err = http.ListenAndServe(fmt.Sprintf(":%d", port), r)
 	if err != nil {
 		logger.Error("server failed", "error", err)

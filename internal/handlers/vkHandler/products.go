@@ -1,14 +1,16 @@
 package vkHandler
 
-type Products []Product
-type Product struct {
-	ID       int64
-	Title    string
-	Name     string
-	Credits  int64
-	Price    int // в голосах
-	PhotoURL string
-}
+type (
+	Products []Product
+	Product  struct {
+		ID       int64
+		Title    string
+		Name     string
+		Credits  int64
+		Price    int // в голосах
+		PhotoURL string
+	}
+)
 
 // Каталог товаров.
 // Ключ = то самое item, которое ты передаешь в VKWebAppShowOrderBox.
@@ -52,6 +54,7 @@ func getProduct(name string) *Product {
 	if !ok {
 		return nil
 	}
+
 	return product
 }
 
@@ -61,5 +64,6 @@ func getProductById(id int64) *Product {
 			return product
 		}
 	}
+
 	return nil
 }

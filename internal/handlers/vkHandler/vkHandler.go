@@ -61,7 +61,7 @@ func (h *Handler) Callback(w http.ResponseWriter, r *http.Request) {
 		h.handleGetItem(w, form)
 
 	case "order_status_change", "order_status_change_test":
-		h.handleOrderStatusChange(w, form)
+		h.handleOrderStatusChange(r.Context(), w, form)
 
 	default:
 		h.writeVKError(w, http.StatusBadRequest, 100, "unknown notification_type", true)
@@ -78,6 +78,7 @@ func (h *Handler) handleGetItem(w http.ResponseWriter, form map[string]string) {
 	}
 
 	var resp vkSuccessGetItem
+
 	resp.Response.ItemID = item.ID
 	resp.Response.Title = item.Title
 	resp.Response.PhotoURL = item.PhotoURL
@@ -86,12 +87,10 @@ func (h *Handler) handleGetItem(w http.ResponseWriter, form map[string]string) {
 	h.writeJSON(w, http.StatusOK, resp)
 }
 
-func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string]string) {
-	ctx := context.Background()
+func (h *Handler) handleOrderStatusChange(ctx context.Context, w http.ResponseWriter, form map[string]string) {
 	// Обычно нас интересует только chargeable.
 	// Именно здесь нужно атомарно выдать товар/кредиты пользователю.
-	status := form["status"]
-	if status != "chargeable" {
+	if !h.isStatusChargeable(form) {
 		h.writeVKError(w, http.StatusOK, 100, "unsupported status", true)
 		return
 	}
@@ -108,21 +107,10 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 		return
 	}
 
-	usr, err := h.userService.FindByVKID(ctx, vkUserID)
+	usr, err := h.userService.FindByVkIDOrUpsert(ctx, vkUserID)
 	if err != nil {
 		h.writeVKError(w, http.StatusBadRequest, 100, "user doesn't exists", true)
-		h.logger.Error("cannot get user", "error", err, "vkUserID", vkUserID)
-		return
-	}
-	if usr == nil {
-		usr, err = h.userService.Upsert(ctx, &user.User{
-			UserVKID: vkUserID,
-			PeerID:   0,
-		})
-		if err != nil {
-			h.writeVKError(w, http.StatusBadRequest, 100, "user doesn't exists", true)
-			h.logger.Error("cannot create user", "error", err, "vkUserID", vkUserID)
-		}
+		h.logger.Error(err.Error(), "error", err, "vkUserID", vkUserID)
 	}
 
 	itemID, err := strconv.ParseInt(form["item_id"], 10, 64)
@@ -140,6 +128,7 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 	}
 
 	tx, err := h.txManager.Begin(ctx)
+
 	defer func() {
 		if err := tx.Rollback(ctx); err != nil {
 			h.logger.Error("failed to rollback transaction", "error", err)
@@ -149,6 +138,7 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 	if err != nil {
 		h.writeVKError(w, http.StatusInternalServerError, 100, "failed to start transaction", true)
 		h.logger.Error("failed to start transaction", "error", err)
+
 		return
 	}
 
@@ -156,11 +146,13 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 	if err != nil {
 		h.writeVKError(w, http.StatusInternalServerError, 100, "error get order", true)
 		h.logger.Error("failed to get order", "error", err, "orderID", orderID)
+
 		return
 	}
 
 	if ord != nil {
 		var resp vkSuccessChargeable
+
 		resp.Response.OrderID = ord.VkOrderID
 		resp.Response.AppOrderID = ord.ID
 
@@ -171,6 +163,7 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 	if err != nil {
 		h.writeVKError(w, http.StatusInternalServerError, 100, "error increase credits", true)
 		h.logger.Error("failed to increase credits for user", "user", usr.ID, "vkUserID", usr.UserVKID, "error", err.Error())
+
 		return
 	}
 
@@ -179,24 +172,36 @@ func (h *Handler) handleOrderStatusChange(w http.ResponseWriter, form map[string
 		UserID:    usr.ID,
 		Product:   product.Name,
 	})
-
 	if err != nil {
 		h.writeVKError(w, http.StatusInternalServerError, 100, "error upsert order", true)
 		h.logger.Error("error upsert order", "error", err.Error())
+
 		return
 	}
+
 	err = tx.Commit(ctx)
 	if err != nil {
 		h.writeVKError(w, http.StatusInternalServerError, 100, "error commit transaction", true)
 		h.logger.Error("failed to commit transaction", "error", err)
+
 		return
 	}
 
 	var resp vkSuccessChargeable
+
 	resp.Response.OrderID = orderID
 	resp.Response.AppOrderID = newOrder.ID
 
 	h.writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *Handler) isStatusChargeable(form map[string]string) bool {
+	status, ok := form["status"]
+	if !ok {
+		return false
+	}
+
+	return status == "chargeable"
 }
 
 func (h *Handler) validateVKSignature(form map[string]string, secureKey string) bool {
@@ -211,8 +216,10 @@ func (h *Handler) validateVKSignature(form map[string]string, secureKey string) 
 		if k == "sig" {
 			continue
 		}
+
 		keys = append(keys, k)
 	}
+
 	sort.Strings(keys)
 
 	var b strings.Builder
@@ -231,7 +238,11 @@ func (h *Handler) validateVKSignature(form map[string]string, secureKey string) 
 func (h *Handler) writeJSON(w http.ResponseWriter, statusCode int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
-	_ = json.NewEncoder(w).Encode(v)
+
+	err := json.NewEncoder(w).Encode(v)
+	if err != nil {
+		h.logger.Error("failed to encode response", "error", err)
+	}
 }
 
 func (h *Handler) writeVKError(w http.ResponseWriter, statusCode, code int, msg string, critical bool) {
@@ -239,9 +250,13 @@ func (h *Handler) writeVKError(w http.ResponseWriter, statusCode, code int, msg 
 	w.WriteHeader(statusCode)
 
 	var resp vkError
+
 	resp.Error.Code = code
 	resp.Error.Msg = msg
 	resp.Error.Critical = critical
 
-	_ = json.NewEncoder(w).Encode(resp)
+	err := json.NewEncoder(w).Encode(resp)
+	if err != nil {
+		h.logger.Error("failed to encode response", "error", err)
+	}
 }

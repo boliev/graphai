@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -11,8 +12,10 @@ import (
 	"google.golang.org/genai"
 )
 
-const GEMINI_MODEL = "gemini-2.5-flash-image"
-const PROMTP_END = ". Please respond by one photo, no text."
+const (
+	geminiModel = "gemini-2.5-flash-image"
+	promptEnd   = ". Please respond by one photo, no text."
+)
 
 type Gemini struct {
 	client *genai.Client
@@ -35,25 +38,33 @@ func NewGemini(ctx context.Context, token string) (*Gemini, error) {
 func (g *Gemini) Send(ctx context.Context, description string, files []string) (*domain.AIResponse, error) {
 	parts := []*genai.Part{
 		genai.NewPartFromText(
-			description + PROMTP_END,
+			description + promptEnd,
 		),
 	}
 
 	for _, file := range files {
-		resp, err := http.Get(file)
+		request, err := http.NewRequestWithContext(ctx, "GET", file, nil)
 		if err != nil {
 			return nil, err
 		}
-		defer resp.Body.Close()
 
-		if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		resp, err := http.DefaultClient.Do(request)
+		if err != nil {
+			return nil, err
+		}
+
+		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+			_ = resp.Body.Close()
 			return nil, fmt.Errorf("cannot download photo from telegram %s: %s", file, resp.Status)
 		}
 
 		b, err := io.ReadAll(resp.Body)
 		if err != nil {
+			_ = resp.Body.Close()
 			return nil, err
 		}
+
+		_ = resp.Body.Close()
 
 		mime := g.guessMimeByPath(file)
 
@@ -64,7 +75,7 @@ func (g *Gemini) Send(ctx context.Context, description string, files []string) (
 		genai.NewContentFromParts(parts, genai.RoleUser),
 	}
 
-	resp, err := g.client.Models.GenerateContent(ctx, GEMINI_MODEL, contents, nil)
+	resp, err := g.client.Models.GenerateContent(ctx, geminiModel, contents, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -77,10 +88,12 @@ func (g *Gemini) getBytes(resp *genai.GenerateContentResponse) (*domain.AIRespon
 		if cand.Content == nil {
 			continue
 		}
+
 		for _, part := range cand.Content.Parts {
 			if part.InlineData == nil || len(part.InlineData.Data) == 0 {
 				continue
 			}
+
 			mime := part.InlineData.MIMEType
 			if !strings.HasPrefix(mime, "image/") {
 				continue
@@ -94,7 +107,7 @@ func (g *Gemini) getBytes(resp *genai.GenerateContentResponse) (*domain.AIRespon
 		}
 	}
 
-	return nil, fmt.Errorf("no image found in gemini response")
+	return nil, errors.New("no image found in gemini response")
 }
 
 func (g *Gemini) guessMimeByPath(p string) string {

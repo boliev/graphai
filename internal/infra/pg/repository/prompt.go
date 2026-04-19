@@ -17,6 +17,7 @@ func NewPromptsRepo(pool *pgxpool.Pool) *PromptsRepo {
 
 func (t *PromptsRepo) Create(ctx context.Context, prompt *prompt.Prompt) error {
 	sql := "INSERT INTO prompts (user_id, prompt) VALUES ($1, $2)"
+
 	_, err := t.pool.Exec(ctx, sql, prompt.UserID, prompt.Prompt)
 	if err != nil {
 		return err
