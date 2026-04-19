@@ -167,10 +167,6 @@ formatters:
   settings:
     gofumpt:
       extra-rules: true
-    goimports:
-      local-prefixes:
-        - git.wildberries.ru
-        - gitlab.wildberries.ru
 
   exclusions:
     generated: lax

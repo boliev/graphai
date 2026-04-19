@@ -204,7 +204,7 @@ func (s *Sender) prices(peerID int64) error {
 	return s.sendText(peerID, pricesMessage)
 }
 
-func (s *Sender) NotEnoughMoney(peerID int64) error {
+func (s *Sender) notEnoughMoney(peerID int64) error {
 	return s.sendText(peerID, notEnoughMoneyMessage)
 }
 

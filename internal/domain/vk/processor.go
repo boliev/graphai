@@ -87,7 +87,7 @@ func (p *Processor) handleMessage(ctx context.Context, msg object.MessagesMessag
 	}
 
 	if !usr.HasBalance() {
-		err := p.sender.NotEnoughMoney(usr.PeerID)
+		err := p.sender.notEnoughMoney(usr.PeerID)
 		if err != nil {
 			return fmt.Errorf("sender.NotEnoughMoney failed: %w", err)
 		}
@@ -208,8 +208,11 @@ func (p *Processor) userFromMessage(msg object.MessagesMessage) *user.User {
 
 func (p *Processor) sendWithRetries(ctx context.Context, prompt string, photoURLs []string) (*domain.AIResponse, error) {
 	var err error
+
 	for i := 1; i <= geminiResentTries; i++ {
-		resp, err := p.aiClient.Send(ctx, prompt, photoURLs)
+		var resp *domain.AIResponse
+
+		resp, err = p.aiClient.Send(ctx, prompt, photoURLs)
 		if err == nil {
 			return resp, nil
 		}
